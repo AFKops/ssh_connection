@@ -1,119 +1,200 @@
-# 🚀 SSH Connection API  
+# SSH WebSocket Server (AES Encrypted)
 
-A lightweight **Flask-based API** for securely executing SSH commands on remote servers using **Paramiko**. This API allows remote command execution by sending SSH credentials and a command via HTTP POST requests.  
-
-## ✨ Features  
-✅ **Connect to remote servers** using SSH credentials  
-✅ **Execute commands** on remote servers and return output  
-✅ **Secure API** handling with structured JSON responses  
-✅ **Built with Flask & Paramiko** for seamless SSH communication  
+A secure WebSocket-based server for remote SSH access and command execution, built with Quart and AsyncSSH. This server allows encrypted SSH credential exchange via AES-CBC, providing a safe way to initiate SSH sessions and run commands remotely.
 
 ---
 
-## 🛠️ Installation  
+## Features
 
-### 1️⃣ Clone the Repository  
+- Secure WebSocket communication for SSH sessions
+- AES-CBC encrypted credentials from client to server
+- Interactive bash session via PTY
+- Real-time streaming of command output
+- Support for Ctrl+C, file listing, and basic command execution
+
+---
+
+## Installation
+
+### 1. Clone the Repository
+
 ```bash
-git clone https://github.com/chatdevops/ssh_connection.git
-cd ssh_connection
+git clone https://github.com/chatdevops/backend.git
+cd backend
 ```
 
-### 2️⃣ Install Dependencies  
-Ensure you have Python installed, then run:  
+### 2. Set Up Virtual Environment
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### 3. Install Dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
-(If `requirements.txt` doesn't exist, install manually: `pip install flask paramiko`)
 
 ---
 
-## 🚀 Running the API  
+## Configuration
 
-### **Start the Flask Server**  
-```bash
-python ssh_server.py
+### 1. Create `.env` File
+
+Inside `/var/www/chatops/.env` or your project root, add:
+
 ```
-✅ The API will now be available at:  
-`http://0.0.0.0:5000` (accessible on all interfaces)  
+ENCRYPTION_KEY=your_base64_encoded_256bit_key
+```
 
-✅ Or locally on:  
-`http://127.0.0.1:5000`
+You can generate a valid key using:
+
+```bash
+head -c 32 /dev/urandom | base64
+```
 
 ---
 
-## 🔌 API Usage  
+## Running the Server
 
-### **1️⃣ Sending an SSH Command**  
-Make a **POST request** to `/ssh` with the following **JSON payload**:
+### 1. Start the Server (Development)
+
+```bash
+python app.py
+```
+
+### 2. Start with Hypercorn (Production-ready)
+
+```bash
+hypercorn app:app --bind 0.0.0.0:5000
+```
+
+---
+
+## WebSocket API
+
+### Connect and Authenticate
+
+Send a JSON payload to `/ssh-stream` WebSocket endpoint:
 
 ```json
 {
-  "host": "192.168.1.100",
-  "username": "root",
-  "password": "your_password",
+  "action": "CONNECT",
+  "host": "<encrypted_base64>",
+  "username": "<encrypted_base64>",
+  "password": "<encrypted_base64>"
+}
+```
+
+### Send a Command
+
+```json
+{
+  "action": "RUN_COMMAND",
   "command": "uptime"
 }
 ```
 
-### **2️⃣ Example Using cURL**  
-```bash
-curl -X POST http://192.168.1.100:5000/ssh \
-     -H "Content-Type: application/json" \
-     -d '{"host": "your_server_ip", "username": "root", "password": "your_password", "command": "uptime"}'
-```
+### Stop a Command
 
-### **3️⃣ Example Python Request**  
-```python
-import requests
-
-url = "http://192.168.1.100:5000/ssh"
-data = {
-    "host": "your_server_ip",
-    "username": "root",
-    "password": "your_password",
-    "command": "uptime"
+```json
+{
+  "action": "CTRL_C"
 }
+```
 
-response = requests.post(url, json=data)
-print(response.json())
+### List Directory Contents
+
+```json
+{
+  "action": "LIST_FILES",
+  "directory": "/home"
+}
 ```
 
 ---
 
-## 🔒 Security Considerations  
-⚠️ **DO NOT expose this API to the public internet** without proper authentication and security measures.  
-⚠️ Consider using **SSH keys instead of passwords** for authentication.  
-⚠️ Deploy with **gunicorn + Nginx** in production instead of Flask's built-in server.  
+## Internal API
+
+### Get Encryption Key (for development only)
+
+```http
+GET /get-key
+```
+
+Returns:
+
+```json
+{ "key": "your_base64_key" }
+```
 
 ---
 
-## 📌 Deploying on a Remote Server (DigitalOcean, AWS, etc.)  
+## Hosting Instructions (Self-Hosting Guide)
 
-### **Step 1: Run API in the Background**  
-Use **screen** or **nohup** to keep it running:  
+### 1. Setup Server (Ubuntu/Debian Example)
+
 ```bash
-nohup python ssh_server.py &
+sudo apt update
+sudo apt install python3 python3-venv python3-pip nginx
 ```
 
-### **Step 2: Allow External Traffic (If Needed)**  
-Open port **5000** on your firewall:  
+### 2. Create Project Directory
+
+```bash
+sudo mkdir -p /var/www/chatops
+sudo chown $USER:$USER /var/www/chatops
+cd /var/www/chatops
+```
+
+### 3. Deploy the App Code
+
+Place your cloned `backend` code or copy project files into this folder.
+
+### 4. Setup Virtual Environment
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 5. Add `.env`
+
+```bash
+echo "ENCRYPTION_KEY=$(head -c 32 /dev/urandom | base64)" > .env
+```
+
+### 6. Run with Hypercorn in Background
+
+```bash
+nohup hypercorn app:app --bind 0.0.0.0:5000 &
+```
+
+### 7. (Optional) Set Up Nginx Reverse Proxy
+
+Configure a basic Nginx server block for HTTPS/WebSocket proxying.
+
+### 8. Open Port (If Firewall Enabled)
+
 ```bash
 sudo ufw allow 5000/tcp
 ```
 
-### **Step 3: Access API Remotely**  
-Use your **server's public IP**:  
-```bash
-curl -X POST http://your_server_ip:5000/ssh \
-     -H "Content-Type: application/json" \
-     -d '{"host": "your_server_ip", "username": "root", "password": "your_password", "command": "uptime"}'
-```
+---
+
+## Notes
+
+- Requires Python 3.10+
+- Encryption key must decode to exactly 32 bytes for AES-256
+- Interactive shell uses `bash -i` and PTY for full terminal capabilities
+- Do not expose `/get-key` endpoint in production
+- Consider SSL (WSS) if deploying to the internet
 
 ---
 
-## 📜 License  
-MIT License. Free to use, modify, and distribute.  
+## License
 
----
+MIT License. Feel free to use, modify, and distribute it. If it is useful, do give me a shoutout.
 
-🚀 **Happy SSH-ing!** Let me know if you need any modifications! 😃
