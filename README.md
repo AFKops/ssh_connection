@@ -172,9 +172,21 @@ echo "ENCRYPTION_KEY=$(head -c 32 /dev/urandom | base64)" > .env
 nohup hypercorn app:app --bind 0.0.0.0:5000 &
 ```
 
-### 7. (Optional) Set Up Nginx Reverse Proxy
+### 7. (Optional) Set Up Nginx Reverse Proxy for WebSocket Support
 
-Configure a basic Nginx server block for HTTPS/WebSocket proxying.
+If you're hosting behind Nginx, add this to your config:
+
+```nginx
+location /ssh-stream {
+    proxy_pass http://127.0.0.1:5000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+}
+```
+
+Also ensure WebSocket ports are allowed through your firewall.
 
 ### 8. Open Port (If Firewall Enabled)
 
@@ -190,7 +202,8 @@ sudo ufw allow 5000/tcp
 - Encryption key must decode to exactly 32 bytes for AES-256
 - Interactive shell uses `bash -i` and PTY for full terminal capabilities
 - Do not expose `/get-key` endpoint in production
-- Consider SSL (WSS) if deploying to the internet
+- Make sure your reverse proxy (e.g., Nginx) supports WebSockets properly
+- Use SSL and WSS in production deployments for encrypted transport
 
 ---
 
